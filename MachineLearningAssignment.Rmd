@@ -1,0 +1,98 @@
+---
+title: "MachineLearningAssignment"
+author: "Pratham"
+date: "May 21, 2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(cache=TRUE)
+```
+
+## Introduction
+
+The goal of this assignment is to take a look at accelerometer data on various parts of the body to evaluate form using a dumbbell. The algorithm we create will be used to predict what kind of form was used to perform a rep. There are 6 different classes of reps in total . The first class A, is the correct rep motion. All the other classes of motion are incorrect. 
+
+We will first load the caret package and the data. 
+```{r}
+library(caret)
+fitness_training<-read.table("./pml-training.csv", header=TRUE, sep=",")
+fitness_testing<-read.table("./pml-testing.csv",header=TRUE, sep=",")
+```
+
+To ensure that we can cross validate , we will partition the training set further. A seed is set for reproducibility 
+```{r}
+set.seed(1000)
+inTrain <- createDataPartition(y=fitness_training$classe, p=0.7, list=F)
+fitness_training_train <- fitness_training[inTrain, ]
+fitness_training_testing <- fitness_training[-inTrain, ]
+```
+
+##Cleaning the data
+
+Step 1 in cleaning the data is to remove variables with near zero variance using the function with the same name. 
+
+```{r}
+novar <- nearZeroVar(fitness_training_train)
+fitness_training_train <- fitness_training_train[,-novar]
+fitness_training_testing <- fitness_training_testing[,-novar]
+```
+
+Step 2 in cleaning the data is to remove columns that have a lot of NAs. Following standards of soicial science we will use 95%. 
+
+```{r}
+fitness_training_train<- fitness_training_train[, -which(colMeans(is.na(fitness_training_train)) > 0.95)]
+fitness_training_testing<- fitness_training_testing[, -which(colMeans(is.na(fitness_training_testing)) > 0.95)]
+```
+
+Step 3 in cleaning the data is to remove the first 5 columns of the data set which have fields like timestap, id etc and do not get used in processing. 
+
+```{r}
+fitness_training_train <- fitness_training_train[,-(1:5)]
+fitness_training_testing <- fitness_training_testing[,-(1:5)]
+```
+
+##Fitting and selecting a model
+
+The first model we will try is Random forests since it is known to give high prediction rates using bagging. If the results are not good, we can look at other models such as boosting. 
+
+We will setup cross validation first before fitting the model. 
+
+```{r}
+cvsetup <- trainControl(method="cv",number = 3, verboseIter = F)
+modelfit <- train(classe ~ ., data=fitness_training_train, method="rf", trControl=cvsetup)
+```
+
+Now we use this model to predict the testing set we created within the training set. The confusion matrix will tell us how accurate the fit is. 
+
+```{r}
+predictedvalues <- predict(modelfit, newdata=fitness_training_testing)
+confusionMatrix(fitness_training_testing$classe, predictedvalues)
+```
+
+The out of sample error here is about 0.2 % and the accuracy rate of above 99% indicates that this is a good model to use. 
+
+##Predicting values for the test set
+
+We will retrain the model on the whole training set. Before that we need to clean our test and training sets. The final result will be our predictions for the test set.
+
+```{r}
+novar <- nearZeroVar(fitness_training)
+fitness_training<- fitness_training[,-novar]
+fitness_testing <- fitness_testing[,-novar]
+
+fitness_training<- fitness_training[, -which(colMeans(is.na(fitness_training)) > 0.95)]
+fitness_testing<- fitness_testing[, -which(colMeans(is.na(fitness_testing)) > 0.95)]
+
+fitness_training<- fitness_training[,-(1:5)]
+fitness_testing <- fitness_testing[,-(1:5)]
+
+cvsetup <- trainControl(method="cv",number = 3, verboseIter = F)
+modelfitfinal <- train(classe ~ ., data=fitness_training, method="rf", trControl=cvsetup)
+
+predictedvaluesfinal <- predict(modelfitfinal, newdata=fitness_testing)
+
+
+print(predictedvaluesfinal)
+```
